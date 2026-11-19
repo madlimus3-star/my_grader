@@ -1,0 +1,14 @@
+{
+  "name": "my-grader",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Local C++ online judge: PDF statements, categories, test cases and a browser editor",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

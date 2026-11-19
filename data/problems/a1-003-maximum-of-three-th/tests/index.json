@@ -1,0 +1,24 @@
+{
+  "tests": [
+    {
+      "id": "001",
+      "sample": true,
+      "createdAt": "2026-11-19T13:30:01.714Z"
+    },
+    {
+      "id": "002",
+      "sample": true,
+      "createdAt": "2026-11-19T13:30:01.716Z"
+    },
+    {
+      "id": "003",
+      "sample": false,
+      "createdAt": "2026-11-19T13:30:01.716Z"
+    },
+    {
+      "id": "004",
+      "sample": false,
+      "createdAt": "2026-11-19T13:30:01.717Z"
+    }
+  ]
+}
