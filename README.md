@@ -15,8 +15,13 @@ Everything lives in this folder. No accounts, no cloud, no npm dependencies.
 
 ## Features
 
-- **PDF statements** — upload the original `.pdf` (or a PNG/JPEG scan) per problem; it renders
-  inside the page with open/download/replace actions.
+- **PDF statements** — upload the original `.pdf` (or a PNG/JPEG scan) per problem. PDFs are
+  rendered to page images with `pdftoppm`, so the statement sits beside your code at any pane
+  width, with zoom controls and no clipped pages; the original file is one click away.
+- **Side-by-side workspace** — the editor and result panel are on the left, the statement on the
+  right, in the same screen. Drag the divider to resize, double-click it to reset, collapse the
+  result panel, or expand the statement to full width. The problem header itself collapses too,
+  so a long title never pushes the statement out of view.
 - **Categories** — free-form tags per problem (`TOI Zero`, `Array`, `String`, …) that become the
   sidebar filters, with counts.
 - **Test cases** — add input/expected pairs by hand, mark any of them as *sample*, or import a
@@ -37,6 +42,7 @@ Everything lives in this folder. No accounts, no cloud, no npm dependencies.
 | Compiler | `g++` with C++17 (Ubuntu: `sudo apt install build-essential`) |
 | Limits | `prlimit` from util-linux (preinstalled on Ubuntu) |
 | Optional | `unshare` for network isolation, available on most Linux systems |
+| Optional | `pdftoppm` from poppler-utils, to render PDF statements as page images (`sudo apt install poppler-utils`). Without it the PDF opens in the browser viewer instead. |
 
 No `npm install` is needed — the server uses only the Node standard library and CodeMirror is
 already vendored under `public/vendor/codemirror`.
@@ -63,10 +69,14 @@ The startup banner prints the detected compiler and which sandbox layers are act
    optional at creation and can be replaced later from the *Statement* tab.
 2. **Test cases tab** — paste input/expected pairs, tick *sample* for the ones a solver may see,
    or *Import .in/.out pairs* to add many at once (`1.in` + `1.out`, `test2.in` + `test2.out`, …).
-3. **Solve tab** — write C++17 and press:
+4. **Solve tab** — the editor is on the left and the statement on the right:
    - `Run samples` (or `Ctrl`/`Cmd` + `Enter`) to try only the sample tests,
    - `Submit` (or `Ctrl`/`Cmd` + `Shift` + `Enter`) to grade every test.
-4. **Submissions tab** — history for the problem; click a row to restore that code and verdicts.
+   - Drag the vertical divider to change how much room the statement gets (double-click resets
+     to 50/50), drag the divider above the result panel to resize it, use the corner icon in the
+     statement toolbar for a full-width statement, and the **Collapse** button in the header to
+     shrink the title block.
+5. **Submissions tab** — history for the problem; click a row to restore that code and verdicts.
 
 The *show hidden test data* checkbox re-runs the submission and includes hidden inputs, expected
 outputs and diffs in the results.
@@ -97,6 +107,7 @@ my_grader/
     ├── problems/<id>/
     │   ├── problem.json   title, tags, limits, statement metadata
     │   ├── statement.pdf  the uploaded PDF
+    │   ├── pages/         rendered page images (1.png, 2.png, …, git-ignored)
     │   └── tests/
     │       ├── index.json order + sample flags
     │       └── 001.in, 001.out, …
@@ -116,6 +127,7 @@ All JSON, no authentication:
 | `GET`/`POST` | `/api/problems` | list / create |
 | `GET`/`PATCH`/`DELETE` | `/api/problems/:id` | read / update / delete |
 | `GET`/`POST`/`DELETE` | `/api/problems/:id/statement` | stream / upload (base64 JSON) / remove |
+| `GET` | `/api/problems/:id/pages/:n` | rendered statement page (PNG) |
 | `GET`/`POST` | `/api/problems/:id/tests` | list / add |
 | `POST` | `/api/problems/:id/tests/bulk` | add many pairs |
 | `GET`/`PATCH`/`DELETE` | `/api/problems/:id/tests/:tid` | read / edit or toggle sample / delete |

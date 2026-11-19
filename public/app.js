@@ -15,10 +15,14 @@
     problem: null,
     tests: [],
     problemSubs: [],
-    tab: 'statement',
+    tab: 'solve',
+    headerCollapsed: localStorage.getItem('mg:header-collapsed') === '1',
     editor: null,
     submitting: false,
     reveal: false,
+    statementFocus: false,
+    pdfZoom: 1,
+    pdfResizeObserver: null,
     lastSubmission: null,
     saveTimer: null,
   };
@@ -310,7 +314,7 @@ int main() {
       state.problem = problem;
       state.tests = tests.tests;
       state.problemSubs = subs.submissions;
-      state.tab = tab || 'statement';
+      state.tab = tab === 'statement' || !tab ? 'solve' : tab;
       state.lastSubmission = null;
       state.reveal = false;
       renderProblem();
@@ -324,7 +328,7 @@ int main() {
     if (!p) return;
     $('#view').innerHTML = `
       <div class="problem">
-        <div class="phead">
+        <div class="phead ${state.headerCollapsed ? 'collapsed' : ''}" id="phead">
           <div class="crumbs"><a href="#/">Problems</a><span>/</span><span>${esc(p.id)}</span></div>
           <div class="phead-row">
             <div>
@@ -336,6 +340,12 @@ int main() {
               </div>
             </div>
             <div class="phead-actions">
+              <button class="btn btn-sm btn-ghost" data-act="toggle-head" type="button"
+                      aria-expanded="${state.headerCollapsed ? 'false' : 'true'}"
+                      title="${state.headerCollapsed ? 'Expand the problem header' : 'Collapse the problem header'}">
+                <svg class="chev" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 15l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <span>${state.headerCollapsed ? 'Expand' : 'Collapse'}</span>
+              </button>
               <button class="btn btn-sm" data-act="edit" type="button">Edit</button>
               <button class="btn btn-sm btn-danger" data-act="delete" type="button">Delete</button>
             </div>
@@ -351,7 +361,6 @@ int main() {
           </div>
         </div>
         <div class="tabs">
-          ${tabButton('statement', 'Statement')}
           ${tabButton('solve', 'Solve')}
           ${tabButton('tests', 'Test cases', state.tests.length)}
           ${tabButton('subs', 'Submissions', state.problemSubs.length)}
@@ -369,6 +378,16 @@ int main() {
     );
     $('[data-act="edit"]').addEventListener('click', () => openProblemModal(p));
     $('[data-act="delete"]').addEventListener('click', () => deleteProblem(p));
+    $('[data-act="toggle-head"]').addEventListener('click', (event) => {
+      state.headerCollapsed = !state.headerCollapsed;
+      localStorage.setItem('mg:header-collapsed', state.headerCollapsed ? '1' : '0');
+      $('#phead').classList.toggle('collapsed', state.headerCollapsed);
+      const btn = event.currentTarget;
+      btn.setAttribute('aria-expanded', String(!state.headerCollapsed));
+      btn.title = state.headerCollapsed ? 'Expand the problem header' : 'Collapse the problem header';
+      const label = btn.querySelector('span');
+      if (label) label.textContent = state.headerCollapsed ? 'Expand' : 'Collapse';
+    });
 
     renderTabBody();
   }
@@ -383,55 +402,93 @@ int main() {
     const body = $('#tab-body');
     if (!body) return;
     destroyEditor();
-    if (state.tab === 'statement') renderStatementTab(body);
-    else if (state.tab === 'solve') renderSolveTab(body);
+    if (state.tab === 'solve' || state.tab === 'statement') renderSolveTab(body);
     else if (state.tab === 'tests') renderTestsTab(body);
     else renderSubsTab(body);
   }
 
   /* ---------------- statement ---------------- */
 
-  function renderStatementTab(body) {
+  function statementPaneHtml() {
     const p = state.problem;
     if (!p.statementFile) {
-      body.innerHTML = `
-        <div class="statement-missing">
-          <div class="empty" style="max-width:460px">
+      return `
+        <div class="statement-bar">
+          <span class="name">Statement</span>
+          <span class="chip chip-dim">none</span>
+          <div class="spacer"></div>
+          <button class="btn btn-sm btn-primary" data-act="upload" type="button">Upload PDF</button>
+        </div>
+        <div class="statement-frame statement-frame-empty">
+          <div class="empty" style="max-width:420px">
             <h3>No statement uploaded</h3>
-            <p>Upload the problem PDF (or an image of it) and it will render right here.</p>
+            <p>Upload the problem PDF (or a scan) and read it next to your code.</p>
             <button class="btn btn-primary" data-act="upload" type="button">Upload PDF</button>
           </div>
         </div>`;
-      attachUpload(body);
-      return;
     }
-    body.innerHTML = `
-      <div class="statement-wrap">
-        <div class="statement-bar">
-          <span class="name">${esc(p.statementName || p.statementFile)}</span>
-          <span class="chip chip-dim">${fmtBytes(p.statementBytes)}</span>
-          <div class="spacer"></div>
-          <a class="btn btn-sm" href="/api/problems/${p.id}/statement" target="_blank" rel="noopener">Open</a>
-          <a class="btn btn-sm" href="/api/problems/${p.id}/statement" download="${esc(p.statementName || 'statement.pdf')}">Download</a>
-          <button class="btn btn-sm" data-act="upload" type="button">Replace</button>
-        </div>
-        <div class="statement-frame">
-          ${
-            /\.(png|jpe?g|webp)$/i.test(p.statementFile)
-              ? `<img src="/api/problems/${p.id}/statement" alt="Statement" style="max-width:100%;border:1px solid var(--line);border-radius:10px">`
-              : `<object data="/api/problems/${p.id}/statement#view=FitH" type="application/pdf">
-                   <div class="empty"><h3>PDF cannot be embedded</h3><p><a href="/api/problems/${p.id}/statement" target="_blank" rel="noopener">Open the statement in a new tab</a></p></div>
-                 </object>`
-          }
-        </div>
+
+    const isPdf = /\.pdf$/i.test(p.statementFile);
+    const isImage = /\.(png|jpe?g|webp)$/i.test(p.statementFile);
+    const pages = Number(p.statementPages) || 0;
+
+    const bar = `
+      <div class="statement-bar">
+        <span class="name">${esc(p.statementName || p.statementFile)}</span>
+        <span class="chip chip-dim">${fmtBytes(p.statementBytes)}</span>
+        <div class="spacer"></div>
+        <button class="icon-btn" data-act="focus-statement" type="button" title="Full-width statement" aria-label="Full-width statement">
+          <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M4 9V4h5M20 15v5h-5M20 9V4h-5M4 15v5h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <a class="btn btn-sm" href="/api/problems/${p.id}/statement" target="_blank" rel="noopener">Open</a>
+        <a class="btn btn-sm" href="/api/problems/${p.id}/statement" download="${esc(p.statementName || 'statement.pdf')}">Download</a>
+        <button class="btn btn-sm" data-act="upload" type="button">Replace</button>
       </div>`;
-    attachUpload(body);
+
+    if (isImage) {
+      return `${bar}
+        <div class="statement-frame page-frame">
+          <div class="pdf-pages" id="pdf-pages">
+            <div class="pdf-pages-inner" style="--pdf-w:100%">
+              <img src="/api/problems/${p.id}/statement" alt="Statement">
+            </div>
+          </div>
+        </div>`;
+    }
+
+    if (isPdf && pages > 0) {
+      const images = Array.from({ length: pages }, (_, i) =>
+        `<img src="/api/problems/${p.id}/pages/${i + 1}" alt="Statement page ${i + 1}" loading="${i < 2 ? 'eager' : 'lazy'}">`,
+      ).join('');
+      return `${bar}
+        <div class="viewer-bar">
+          <button class="icon-btn" data-act="zoom-out" type="button" title="Zoom out" aria-label="Zoom out">−</button>
+          <span class="zoom-label" id="zoom-label">100%</span>
+          <button class="icon-btn" data-act="zoom-in" type="button" title="Zoom in" aria-label="Zoom in">+</button>
+          <button class="btn btn-sm btn-ghost" data-act="zoom-fit" type="button">Fit width</button>
+          <div class="spacer"></div>
+          <span class="pages-label">${pages} page${pages === 1 ? '' : 's'}</span>
+        </div>
+        <div class="statement-frame page-frame">
+          <div class="pdf-pages" id="pdf-pages">
+            <div class="pdf-pages-inner">${images}</div>
+          </div>
+        </div>`;
+    }
+
+    return `${bar}
+      <div class="statement-frame">
+        <iframe src="/api/problems/${p.id}/statement#view=FitH" title="Problem statement"></iframe>
+      </div>`;
   }
 
   function attachUpload(body) {
+    // One hidden picker at a time: drop any picker left over from a previous render.
+    document.querySelectorAll('input[data-role="statement-upload"]').forEach((el) => el.remove());
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'application/pdf,image/png,image/jpeg,image/webp';
+    input.dataset.role = 'statement-upload';
     input.style.display = 'none';
     document.body.appendChild(input);
     input.addEventListener('change', async () => {
@@ -459,35 +516,53 @@ int main() {
   function renderSolveTab(body) {
     const p = state.problem;
     body.innerHTML = `
-      <div class="solve">
-        <div class="editor-pane">
-          <div class="editor-bar">
-            <span class="file"><span style="color:var(--dim)">~/</span>main.cpp</span>
-            <span class="lang">C++17</span>
-            <div class="spacer"></div>
-            <button class="btn btn-sm" data-act="reset" type="button" title="Restore the starter template">Reset</button>
-            <button class="btn btn-sm" data-act="samples" type="button">Run samples</button>
-            <button class="btn btn-sm btn-primary" data-act="submit" type="button">Submit</button>
+      <div class="solve ${state.statementFocus ? 'is-focused' : ''}" id="solve">
+        <div class="solve-left" id="solve-left">
+          <div class="editor-pane">
+            <div class="editor-bar">
+              <span class="file"><span style="color:var(--dim)">~/</span>main.cpp</span>
+              <span class="lang">C++17</span>
+              <div class="spacer"></div>
+              <button class="btn btn-sm" data-act="reset" type="button" title="Restore the starter template">Reset</button>
+              <button class="btn btn-sm" data-act="samples" type="button">Run samples</button>
+              <button class="btn btn-sm btn-primary" data-act="submit" type="button">Submit</button>
+            </div>
+            <div class="editor-host" id="editor-host"></div>
+            <div class="editor-foot">
+              <span><span class="kbd">Ctrl</span> + <span class="kbd">Enter</span> run samples</span>
+              <span><span class="kbd">Ctrl</span> + <span class="kbd">Shift</span> + <span class="kbd">Enter</span> submit</span>
+              <div class="spacer"></div>
+              <span id="save-state">saved locally</span>
+            </div>
           </div>
-          <div class="editor-host" id="editor-host"></div>
-          <div class="editor-foot">
-            <span><span class="kbd">Ctrl</span> + <span class="kbd">Enter</span> run samples</span>
-            <span><span class="kbd">Ctrl</span> + <span class="kbd">Shift</span> + <span class="kbd">Enter</span> submit</span>
-            <div class="spacer"></div>
-            <span id="save-state">saved locally</span>
-          </div>
+          <div class="hsplit" id="hsplit" role="separator" aria-orientation="horizontal" title="Drag to resize the result panel"><span></span></div>
+          <aside class="result-pane" id="result-pane">
+            <div class="result-head">
+              <h3>Result</h3>
+              <div class="spacer"></div>
+              <span class="vbadge" id="result-verdict" hidden></span>
+              <button class="icon-btn" data-act="toggle-result" type="button" title="Collapse the result panel" aria-label="Collapse the result panel">
+                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+            </div>
+            <div class="result-body" id="result-body">
+              <div class="hint">Run the samples to check your code, or submit to grade every test case.</div>
+            </div>
+          </aside>
         </div>
-        <aside class="result-pane">
-          <div class="result-head">
-            <h3>Result</h3>
-            <div class="spacer"></div>
-            <span class="vbadge v-NO_TESTS" id="result-verdict" hidden></span>
-          </div>
-          <div class="result-body" id="result-body">
-            <div class="hint">Run the samples to check your code, or submit to grade every test case.</div>
-          </div>
+        <div class="vsplit" id="vsplit" role="separator" aria-orientation="vertical" title="Drag to resize the statement"><span></span></div>
+        <aside class="statement-pane">
+          ${statementPaneHtml()}
         </aside>
       </div>`;
+
+    const left = $('#solve-left');
+    const result = $('#result-pane');
+    const savedLeft = Number(localStorage.getItem('mg:split-left'));
+    if (Number.isFinite(savedLeft) && savedLeft >= 25 && savedLeft <= 80) left.style.width = `${savedLeft}%`;
+    const savedResult = Number(localStorage.getItem('mg:result-height'));
+    if (Number.isFinite(savedResult) && savedResult >= 72) result.style.height = `${savedResult}px`;
+    if (localStorage.getItem('mg:result-collapsed') === '1') result.classList.add('collapsed');
 
     const saved = localStorage.getItem(codeKey(p.id));
     const host = $('#editor-host');
@@ -526,8 +601,145 @@ int main() {
       localStorage.removeItem(codeKey(p.id));
     });
 
+    $('[data-act="toggle-result"]').addEventListener('click', (event) => {
+      const collapsed = result.classList.toggle('collapsed');
+      localStorage.setItem('mg:result-collapsed', collapsed ? '1' : '0');
+      const btn = event.currentTarget;
+      btn.title = collapsed ? 'Expand the result panel' : 'Collapse the result panel';
+      btn.setAttribute('aria-label', btn.title);
+      if (state.editor) state.editor.refresh();
+    });
+
+    const focusBtn = $('[data-act="focus-statement"]');
+    if (focusBtn) {
+      focusBtn.addEventListener('click', () => {
+        state.statementFocus = !state.statementFocus;
+        $('#solve').classList.toggle('is-focused', state.statementFocus);
+        setTimeout(() => state.editor && state.editor.refresh(), 60);
+      });
+    }
+
+    attachStatementActions($('.statement-pane'));
+    attachSolveSplitters();
+
     if (state.lastSubmission) renderResult(state.lastSubmission);
     else loadLatestSubmission();
+  }
+
+  function attachStatementActions(root) {
+    if (!root) return;
+    attachUpload(root);
+    attachPdfViewer(root);
+  }
+
+  function attachPdfViewer(root) {
+    const pages = $('#pdf-pages', root);
+    if (!pages) return;
+    const inner = $('.pdf-pages-inner', pages);
+    if (!inner) return;
+    const stored = Number(localStorage.getItem('mg:pdf-zoom'));
+    state.pdfZoom = Number.isFinite(stored) && stored >= 0.4 && stored <= 3 ? stored : 1;
+
+    const apply = () => {
+      const width = Math.max(180, pages.clientWidth - 26);
+      inner.style.setProperty('--pdf-w', `${Math.round(width * state.pdfZoom)}px`);
+      const label = $('#zoom-label', root);
+      if (label) label.textContent = `${Math.round(state.pdfZoom * 100)}%`;
+    };
+
+    const setZoom = (value) => {
+      state.pdfZoom = Math.min(2.5, Math.max(0.5, value));
+      localStorage.setItem('mg:pdf-zoom', String(state.pdfZoom));
+      apply();
+    };
+
+    const zoomIn = $('[data-act="zoom-in"]', root);
+    const zoomOut = $('[data-act="zoom-out"]', root);
+    const zoomFit = $('[data-act="zoom-fit"]', root);
+    if (zoomIn) zoomIn.addEventListener('click', () => setZoom(state.pdfZoom * 1.15));
+    if (zoomOut) zoomOut.addEventListener('click', () => setZoom(state.pdfZoom / 1.15));
+    if (zoomFit) zoomFit.addEventListener('click', () => setZoom(1));
+
+    apply();
+    if (typeof ResizeObserver === 'function') {
+      const observer = new ResizeObserver(() => apply());
+      observer.observe(pages);
+      state.pdfResizeObserver = observer;
+    }
+  }
+
+  function attachSolveSplitters() {
+    const solve = $('#solve');
+    const left = $('#solve-left');
+    const vsplit = $('#vsplit');
+    const hsplit = $('#hsplit');
+    const result = $('#result-pane');
+    if (!solve || !left || !vsplit || !hsplit || !result) return;
+
+    let drag = null;
+
+    const start = (type) => (event) => {
+      if (event.button !== undefined && event.button !== 0) return;
+      event.preventDefault();
+      drag =
+        type === 'v'
+          ? { type, x: event.clientX, width: left.getBoundingClientRect().width, total: solve.getBoundingClientRect().width }
+          : { type, y: event.clientY, height: result.getBoundingClientRect().height, total: solve.getBoundingClientRect().height };
+      document.body.classList.add('is-resizing');
+      try {
+        (type === 'v' ? vsplit : hsplit).setPointerCapture(event.pointerId);
+      } catch {
+        /* synthetic events have no active pointer */
+      }
+    };
+
+    const move = (event) => {
+      if (!drag) return;
+      if (drag.type === 'v') {
+        const px = drag.width + (event.clientX - drag.x);
+        drag.pct = Math.min(80, Math.max(25, (px / drag.total) * 100));
+        left.style.width = `${drag.pct.toFixed(2)}%`;
+      } else {
+        result.classList.remove('collapsed');
+        const px = drag.height - (event.clientY - drag.y);
+        const max = Math.max(120, drag.total - 190);
+        drag.h = Math.min(max, Math.max(72, px));
+        result.style.height = `${drag.h}px`;
+      }
+    };
+
+    const end = () => {
+      if (!drag) return;
+      if (drag.type === 'v' && drag.pct) {
+        localStorage.setItem('mg:split-left', String(Math.round(drag.pct)));
+      }
+      if (drag.type === 'h' && drag.h) {
+        localStorage.setItem('mg:result-height', String(Math.round(drag.h)));
+        localStorage.setItem('mg:result-collapsed', '0');
+      }
+      drag = null;
+      document.body.classList.remove('is-resizing');
+      if (state.editor) state.editor.refresh();
+    };
+
+    vsplit.addEventListener('pointerdown', start('v'));
+    hsplit.addEventListener('pointerdown', start('h'));
+    vsplit.addEventListener('pointermove', move);
+    hsplit.addEventListener('pointermove', move);
+    vsplit.addEventListener('pointerup', end);
+    hsplit.addEventListener('pointerup', end);
+    vsplit.addEventListener('pointercancel', end);
+    hsplit.addEventListener('pointercancel', end);
+    vsplit.addEventListener('dblclick', () => {
+      left.style.width = '50%';
+      localStorage.setItem('mg:split-left', '50');
+      if (state.editor) state.editor.refresh();
+    });
+    hsplit.addEventListener('dblclick', () => {
+      result.style.height = '260px';
+      localStorage.setItem('mg:result-height', '260');
+      if (state.editor) state.editor.refresh();
+    });
   }
 
   async function loadLatestSubmission() {
@@ -582,6 +794,11 @@ int main() {
   function renderResult(sub) {
     const body = $('#result-body');
     if (!body) return;
+    const pane = $('#result-pane');
+    if (pane) {
+      pane.classList.remove('collapsed');
+      localStorage.setItem('mg:result-collapsed', '0');
+    }
     const badge = $('#result-verdict');
     if (badge) {
       badge.hidden = false;
@@ -1086,6 +1303,10 @@ int main() {
   /* ---------------- routing ---------------- */
 
   function destroyEditor() {
+    if (state.pdfResizeObserver) {
+      state.pdfResizeObserver.disconnect();
+      state.pdfResizeObserver = null;
+    }
     if (state.editor) {
       const wrapper = state.editor.getWrapperElement();
       if (wrapper && wrapper.parentNode) wrapper.remove();

@@ -1,4 +1,5 @@
 node_modules/
 data/submissions/
+data/problems/*/pages/
 *.log
 .DS_Store

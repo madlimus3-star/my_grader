@@ -196,6 +196,19 @@ async function handleApi(req, res, url) {
       return fail(res, 405, 'Method not allowed');
     }
 
+    // /api/problems/:id/pages/:n
+    if (parts[3] === 'pages' && parts.length === 5 && method === 'GET') {
+      const file = await store.statementPagePath(id, parts[4]);
+      if (!file) return fail(res, 404, 'Page not found');
+      const stat = await fs.stat(file);
+      res.writeHead(200, {
+        'content-type': 'image/png',
+        'content-length': stat.size,
+        'cache-control': 'public, max-age=3600',
+      });
+      return createReadStream(file).pipe(res);
+    }
+
     // /api/problems/:id/tests
     if (parts[3] === 'tests') {
       if (parts.length === 4) {
