@@ -119,6 +119,7 @@ Deployment steps:
    | Variable | Default | Purpose |
    | --- | --- | --- |
    | `BLOB_READ_WRITE_TOKEN` | – | enables persistent storage (otherwise read-only demo mode) |
+   | `BLOB_ACCESS` | `private` | set to `public` if the Blob store was created as public |
    | `APP_PASSWORD` | – | require HTTP Basic auth (any username, this password) |
    | `JUDGE0_URL` | `https://ce.judge0.com` | point at a self-hosted Judge0 |
    | `JUDGE0_TOKEN` | – | auth token for that Judge0 instance |
