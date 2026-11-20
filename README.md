@@ -162,7 +162,7 @@ my_grader/
 ├── api/[...path].js       Vercel Function entry (all /api routes)
 ├── middleware.js          optional Basic auth for the public deployment
 ├── lib/
-│   ├── api.js             shared JSON API used by server.js and Vercel
+│   ├── api.js             shared JSON API used by the local server and Vercel
 │   ├── store.js           problems, test cases, submissions on disk
 │   ├── judge.js           compile + sandboxed runs (local)
 │   ├── cloud-store.js     Vercel Blob store (single JSON document)
