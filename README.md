@@ -100,7 +100,7 @@ outputs and diffs in the results.
 
 The repository is wired for two backends behind the same UI:
 
-| | Local (`node local-server.js`) | Vercel (`api/[...path].js`) |
+| | Local (`node local-server.js`) | Vercel (`api/` functions) |
 | --- | --- | --- |
 | Compiler / runner | `g++` + `prlimit` + `unshare` | [Judge0 CE](https://ce.judge0.com) |
 | Storage | files under `data/` | one JSON document in Vercel Blob |
@@ -110,8 +110,8 @@ The repository is wired for two backends behind the same UI:
 Deployment steps:
 
 1. Import the GitHub repo into Vercel (framework preset **Other**, no build command). Static
-   files come from `public/`, `api/[...path].js` serves `/api/*`, and `middleware.js` optionally
-   adds HTTP Basic auth.
+   files come from `public/`, the files under `api/` serve `/api/*`, and `middleware.js`
+   optionally adds HTTP Basic auth.
 2. Create a **Blob** store in the project (Storage → Blob) and connect it. Vercel injects
    `BLOB_READ_WRITE_TOKEN`, which makes problems and submissions writable.
 3. Optional environment variables:
@@ -159,7 +159,7 @@ node scripts/test-cloud-store.mjs
 ```
 my_grader/
 ├── local-server.js        local HTTP server and static files
-├── api/[...path].js       Vercel Function entry (all /api routes)
+├── api/                   one Vercel Function per API route
 ├── middleware.js          optional Basic auth for the public deployment
 ├── lib/
 │   ├── api.js             shared JSON API used by the local server and Vercel

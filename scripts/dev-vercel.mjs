@@ -1,6 +1,6 @@
 /**
  * Local harness that emulates Vercel routing for the serverless build:
- * /api/* -> api/[...path].js, everything else -> public/ static file.
+ * /api/* -> lib/vercel.js route, everything else -> public/ static file.
  *
  *   node scripts/dev-vercel.mjs
  */
@@ -27,7 +27,7 @@ const MIME = {
   '.woff2': 'font/woff2',
 };
 
-const { default: apiHandler } = await import('../api/[...path].js');
+const { route } = await import('../lib/vercel.js');
 
 async function serveStatic(req, res, pathname) {
   const rel = pathname === '/' ? 'index.html' : decodeURIComponent(pathname.replace(/^\/+/, ''));
@@ -56,7 +56,7 @@ async function serveStatic(req, res, pathname) {
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
-    if (url.pathname.startsWith('/api/')) return await apiHandler(req, res);
+    if (url.pathname.startsWith('/api/')) return await route(req, res, url.pathname);
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       res.writeHead(405).end('Method not allowed');
       return;
