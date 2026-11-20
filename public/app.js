@@ -131,6 +131,7 @@ int main() {
     ]);
     state.stats = meta.stats;
     state.tools = meta.tools;
+    state.capabilities = meta.capabilities || null;
     state.problems = list.problems;
     state.submissions = subs.submissions;
     renderEngine();
@@ -275,6 +276,11 @@ int main() {
           <h1>${esc(title)}</h1>
           <p>${items.length} of ${state.problems.length} problems</p>
           <div class="spacer"></div>
+          ${
+            state.capabilities && state.capabilities.writable === false
+              ? '<span class="chip chip-dim" title="Connect a Vercel Blob store to save problems and submissions">Read-only demo</span>'
+              : ''
+          }
           <button class="btn btn-sm" data-act="new" type="button">+ New problem</button>
         </div>
         ${
