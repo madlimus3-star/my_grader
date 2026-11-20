@@ -5,7 +5,7 @@
   "type": "module",
   "description": "C++ online judge: PDF statements, categories, test cases and a browser editor (local g++ or Judge0 + Vercel Blob)",
   "scripts": {
-    "start": "node server.js",
+    "start": "node local-server.js",
     "dev": "node --watch server.js",
     "seed": "node scripts/build-seed.mjs"
   },

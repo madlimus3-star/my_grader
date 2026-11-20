@@ -54,14 +54,14 @@ dependency, and it is only imported in serverless mode.)
 
 ```sh
 cd my_grader
-npm start          # or: node server.js
+npm start          # or: node local-server.js
 ```
 
 Open <http://127.0.0.1:3000>.
 
 ```sh
-PORT=4000 node server.js     # another port
-HOST=0.0.0.0 node server.js  # expose on the LAN (see Security)
+PORT=4000 node local-server.js     # another port
+HOST=0.0.0.0 node local-server.js  # expose on the LAN (see Security)
 ```
 
 The startup banner prints the detected compiler and which sandbox layers are active.
@@ -100,7 +100,7 @@ outputs and diffs in the results.
 
 The repository is wired for two backends behind the same UI:
 
-| | Local (`node server.js`) | Vercel (`api/[...path].js`) |
+| | Local (`node local-server.js`) | Vercel (`api/[...path].js`) |
 | --- | --- | --- |
 | Compiler / runner | `g++` + `prlimit` + `unshare` | [Judge0 CE](https://ce.judge0.com) |
 | Storage | files under `data/` | one JSON document in Vercel Blob |
@@ -158,7 +158,7 @@ node scripts/test-cloud-store.mjs
 
 ```
 my_grader/
-├── server.js              local HTTP server and static files
+├── local-server.js        local HTTP server and static files
 ├── api/[...path].js       Vercel Function entry (all /api routes)
 ├── middleware.js          optional Basic auth for the public deployment
 ├── lib/
