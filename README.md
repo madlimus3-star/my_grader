@@ -4,7 +4,9 @@ A small, local **C++ online judge**: keep your own problems as PDF statements, g
 categories such as *TOI Zero* or *Array*, write test cases, and solve them in the browser with a
 real compiler and a finish check on every submission.
 
-Everything lives in this folder. No accounts, no cloud, no npm dependencies.
+Everything lives in this folder. Running it locally needs no accounts, no cloud and no npm
+install. The same code also deploys to Vercel in serverless mode (Judge0 + Vercel Blob), see
+[Deploying to Vercel](#deploying-to-vercel).
 
 ```
 ┌──────────────┬──────────────────────────────────────────────┐
@@ -44,8 +46,9 @@ Everything lives in this folder. No accounts, no cloud, no npm dependencies.
 | Optional | `unshare` for network isolation, available on most Linux systems |
 | Optional | `pdftoppm` from poppler-utils, to render PDF statements as page images (`sudo apt install poppler-utils`). Without it the PDF opens in the browser viewer instead. |
 
-No `npm install` is needed — the server uses only the Node standard library and CodeMirror is
-already vendored under `public/vendor/codemirror`.
+No `npm install` is needed to run locally — the server uses only the Node standard library and
+CodeMirror is already vendored under `public/vendor/codemirror`. (`@vercel/blob` is the single
+dependency, and it is only imported in serverless mode.)
 
 ## Run
 
@@ -93,14 +96,80 @@ outputs and diffs in the results.
   infinite loop cannot stall the queue for a minute.
 - Submissions are serialised: one program runs at a time.
 
+## Deploying to Vercel
+
+The repository is wired for two backends behind the same UI:
+
+| | Local (`node server.js`) | Vercel (`api/[...path].js`) |
+| --- | --- | --- |
+| Compiler / runner | `g++` + `prlimit` + `unshare` | [Judge0 CE](https://ce.judge0.com) |
+| Storage | files under `data/` | one JSON document in Vercel Blob |
+| PDF statements | pages rendered with `pdftoppm` | browser PDF viewer (iframes) |
+| Judging queue | in-process, one at a time | Judge0 batch API |
+
+Deployment steps:
+
+1. Import the GitHub repo into Vercel (framework preset **Other**, no build command). Static
+   files come from `public/`, `api/[...path].js` serves `/api/*`, and `middleware.js` optionally
+   adds HTTP Basic auth.
+2. Create a **Blob** store in the project (Storage → Blob) and connect it. Vercel injects
+   `BLOB_READ_WRITE_TOKEN`, which makes problems and submissions writable.
+3. Optional environment variables:
+
+   | Variable | Default | Purpose |
+   | --- | --- | --- |
+   | `BLOB_READ_WRITE_TOKEN` | – | enables persistent storage (otherwise read-only demo mode) |
+   | `APP_PASSWORD` | – | require HTTP Basic auth (any username, this password) |
+   | `JUDGE0_URL` | `https://ce.judge0.com` | point at a self-hosted Judge0 |
+   | `JUDGE0_TOKEN` | – | auth token for that Judge0 instance |
+   | `JUDGE0_LANGUAGE_ID` | `54` | C++ (GCC 9.2) on Judge0 CE |
+
+4. Push to `main`. The commit includes `lib/seed-data.js`, a snapshot of `data/problems` used to
+   seed a fresh Blob database. After adding problems locally run `npm run seed` and commit the
+   regenerated file.
+
+Serverless limits worth knowing:
+
+- A Vercel Function accepts about **4.5 MB per request**, so cloud uploads are capped at **3 MB**
+  per statement (the local build allows 20 MB). Test files are capped at 8 MB locally but are
+  also bounded by the request limit online.
+- Functions run for at most **300 s**; a batch of up to 60 tests is split into groups of 20 for
+  Judge0 and polled until done.
+- The public Judge0 instance is rate-limited and third-party: submitted code leaves your Vercel
+  project and is executed by `ce.judge0.com`. For private problems, run your own Judge0 and set
+  `JUDGE0_URL`.
+- Blob storage is one JSON document rewritten on each change. With several lambda instances a
+  simultaneous edit can overwrite another (last write wins); history is capped at 200 submissions.
+
+To exercise the serverless build locally without Vercel:
+
+```sh
+node scripts/dev-vercel.mjs        # http://127.0.0.1:3100
+```
+
+With no Blob credentials it seeds from `data/problems` and runs read-only (grading works,
+edits return `503`). The store logic has an offline test:
+
+```sh
+node scripts/test-cloud-store.mjs
+```
+
 ## Data layout
 
 ```
 my_grader/
-├── server.js              HTTP server and API
+├── server.js              local HTTP server and static files
+├── api/[...path].js       Vercel Function entry (all /api routes)
+├── middleware.js          optional Basic auth for the public deployment
 ├── lib/
+│   ├── api.js             shared JSON API used by server.js and Vercel
 │   ├── store.js           problems, test cases, submissions on disk
-│   └── judge.js           compile + sandboxed runs
+│   ├── judge.js           compile + sandboxed runs (local)
+│   ├── cloud-store.js     Vercel Blob store (single JSON document)
+│   ├── judge0.js          Judge0 client (serverless)
+│   ├── pdf.js             pdftoppm page rendering (local)
+│   └── seed-data.js       generated snapshot of data/problems
+├── scripts/               seed generator, Vercel-mode dev server, tests
 ├── public/                UI (no build step)
 │   └── vendor/codemirror/
 └── data/
@@ -119,7 +188,7 @@ tracked (see `.gitignore`).
 
 ## API
 
-All JSON, no authentication:
+All JSON. No authentication locally; set `APP_PASSWORD` on Vercel to require HTTP Basic auth.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
@@ -145,6 +214,10 @@ This is a **local practice tool**, not a hardened public judge.
   a new network namespace via `unshare -rn`. That stops runaway loops and accidental network use,
   but it is not a container or a VM. Only run code you are willing to execute on your machine.
 - For an untrusted audience, put the judge inside Docker/a VM and add an auth layer.
+- On Vercel, submitted code is sent to Judge0 (public `ce.judge0.com` by default) and executed
+  there. Set `APP_PASSWORD` before sharing the URL, and point `JUDGE0_URL` at your own instance
+  if the problems or the code must not leave your infrastructure. The Blob token grants read/write
+  access to the store; keep it in Vercel environment variables only.
 
 ## Licence
 

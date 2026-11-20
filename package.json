@@ -1,12 +1,16 @@
 {
   "name": "my-grader",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
-  "description": "Local C++ online judge: PDF statements, categories, test cases and a browser editor",
+  "description": "C++ online judge: PDF statements, categories, test cases and a browser editor (local g++ or Judge0 + Vercel Blob)",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "seed": "node scripts/build-seed.mjs"
+  },
+  "dependencies": {
+    "@vercel/blob": "^2.9.0"
   },
   "engines": {
     "node": ">=20"

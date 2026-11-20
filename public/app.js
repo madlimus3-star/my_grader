@@ -147,16 +147,17 @@ int main() {
   function renderEngine() {
     const el = $('#engine');
     const text = $('#engine-text');
-    const ok = state.tools && state.tools.gpp;
-    el.classList.toggle('ok', Boolean(ok));
+    const info = state.tools || {};
+    const ok = Boolean(info.gpp);
+    el.classList.toggle('ok', ok);
     el.classList.toggle('bad', !ok);
-    const version = (state.tools.versions && state.tools.versions.gpp) || '';
+    const version = (info.versions && info.versions.gpp) || '';
     const semver = version.match(/(\d+\.\d+\.\d+)/);
-    const short = semver ? `g++ ${semver[1]}` : ok ? 'g++' : 'no compiler';
-    text.textContent = ok ? short : 'g++ missing';
+    const short = info.provider === 'judge0' ? 'Judge0' : semver ? `g++ ${semver[1]}` : ok ? 'g++' : 'no compiler';
+    text.textContent = ok ? short : 'judge unavailable';
     el.title = ok
-      ? `${version}\nprlimit: ${state.tools.prlimit ? 'on' : 'off'} · unshare: ${state.tools.unshare ? 'on' : 'off'}`
-      : 'Install g++ to enable judging';
+      ? `${version}\nprlimit: ${info.prlimit ? 'on' : 'off'} · unshare: ${info.unshare ? 'on' : 'off'}`
+      : 'No judge engine is configured';
   }
 
   /* ---------------- sidebar ---------------- */
