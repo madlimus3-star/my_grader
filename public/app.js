@@ -149,6 +149,9 @@ int main() {
   }
 
   function statusOf(problemId) {
+    // solvedAt is stored on the problem, so it survives submission eviction.
+    const problem = state.problems.find((p) => p.id === problemId);
+    if (problem && problem.solvedAt) return 'solved';
     const subs = state.submissions.filter((s) => s.problemId === problemId);
     if (subs.some((s) => s.verdict === 'AC')) return 'solved';
     if (subs.length) return 'attempted';
@@ -207,7 +210,7 @@ int main() {
       <div class="sidebar-foot">
         <div class="foot-stat"><b>${state.stats.problems}</b><span>problems</span></div>
         <div class="foot-stat"><b>${state.stats.tests}</b><span>tests</span></div>
-        <div class="foot-stat"><b>${state.stats.solved}</b><span>solved</span></div>
+        <div class="foot-stat"><b>${solved}</b><span>solved</span></div>
       </div>`;
 
     $$('#sidebar .nav-item').forEach((btn) => {
@@ -786,6 +789,10 @@ int main() {
       });
       state.lastSubmission = sub;
       renderResult(sub);
+      if (sub.verdict === 'AC') {
+        const solvedProblem = state.problems.find((p) => p.id === sub.problemId);
+        if (solvedProblem && !solvedProblem.solvedAt) solvedProblem.solvedAt = sub.createdAt;
+      }
       const summary = {
         id: sub.id,
         problemId: sub.problemId,

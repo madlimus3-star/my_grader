@@ -125,8 +125,11 @@ Deployment steps:
    | `JUDGE0_LANGUAGE_ID` | `54` | C++ (GCC 9.2) on Judge0 CE |
 
 4. Push to `main`. The commit includes `lib/seed-data.js`, a snapshot of `data/problems` used to
-   seed a fresh Blob database. After adding problems locally run `npm run seed` and commit the
-   regenerated file.
+   seed a **new** Blob database. The snapshot is imported once, when `mygrader/db.json` does not
+   exist yet; existing deployments are never re-scanned against the repo (walking thousands of
+   test files on every request would not scale). Add later problems through **+ New problem** in
+   the UI. After changing problems locally, `npm run seed` regenerates `lib/seed-data.js`, which
+   only affects the first deployment of an empty database.
 
 Serverless limits worth knowing:
 
@@ -140,6 +143,9 @@ Serverless limits worth knowing:
   `JUDGE0_URL`.
 - Blob storage is one JSON document rewritten on each change. With several lambda instances a
   simultaneous edit can overwrite another (last write wins); history is capped at 200 submissions.
+- The first AC is stored as `solvedAt` on the problem itself, so the solved count does not drop
+  when older submissions rotate out of the 200-entry history. Existing databases are backfilled
+  from their AC submissions on the first request.
 
 To exercise the serverless build locally without Vercel:
 

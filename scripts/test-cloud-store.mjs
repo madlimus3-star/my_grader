@@ -67,6 +67,7 @@ await store.updateProblem('cloud-test', { title: 'Cloud Test 2', tags: ['Math'] 
 assert.equal((await store.getProblem('cloud-test')).title, 'Cloud Test 2');
 assert.deepEqual((await store.getProblem('cloud-test')).tags, ['Math']);
 
+const acAt = new Date().toISOString();
 await store.saveSubmission('cloud-test', {
   id: 's1',
   problemId: 'cloud-test',
@@ -75,12 +76,13 @@ await store.saveSubmission('cloud-test', {
   timeMs: 12,
   passed: 1,
   total: 1,
-  createdAt: new Date().toISOString(),
+  createdAt: acAt,
 });
 const list = await store.listSubmissions({ problemId: 'cloud-test' });
 assert.equal(list.length, 1);
 assert.equal((await store.getSubmission('cloud-test', 's1')).verdict, 'AC');
 assert.equal((await store.getSubmission('cloud-test', 'nope')), null);
+assert.equal((await store.getProblem('cloud-test')).solvedAt, acAt, 'AC is recorded on the problem');
 
 // Reload from the persisted database: data must survive a cold start.
 const reloaded = createCloudStore({ driver, seed: seedFromDisk });
@@ -94,14 +96,50 @@ assert.equal((await reloaded.getSubmission('cloud-test', 's1')).verdict, 'AC');
 const stats = await reloaded.stats();
 assert.equal(stats.problems, problems.length + 1);
 assert.equal(stats.submissions, 1);
+assert.ok(stats.solved >= 1, 'solved counts problems with solvedAt');
 
-// Seeding merge: a problem present on disk but not in the blob is imported.
-const merged = JSON.parse(database);
-delete merged.problems['reverse-sequence'];
-database = JSON.stringify(merged);
-const cold = createCloudStore({ driver, seed: seedFromDisk });
+// Backfill: a database written before solvedAt existed recovers it from the AC.
+const legacy = JSON.parse(database);
+delete legacy.problems['cloud-test'].meta.solvedAt;
+database = JSON.stringify(legacy);
+const backfilled = createCloudStore({ driver, seed: seedFromDisk });
+await backfilled.init();
+assert.equal((await backfilled.getProblem('cloud-test')).solvedAt, acAt, 'solvedAt backfilled from history');
+
+// Eviction: once 200 newer submissions push the AC out, the problem stays solved.
+for (let i = 0; i < 260; i++) {
+  await store.saveSubmission('cloud-test', {
+    id: `w${i}`,
+    problemId: 'cloud-test',
+    verdict: 'WA',
+    mode: 'all',
+    timeMs: 1,
+    passed: 0,
+    total: 1,
+    createdAt: new Date(Date.now() + i).toISOString(),
+  });
+}
+const evicted = createCloudStore({ driver, seed: seedFromDisk });
+await evicted.init();
+const evictedList = await evicted.listSubmissions({ problemId: 'cloud-test' });
+assert.equal(evictedList.some((s) => s.verdict === 'AC'), false, 'AC dropped from capped history');
+assert.equal(evictedList.length, 200, 'submission cap holds');
+assert.equal((await evicted.getProblem('cloud-test')).solvedAt, acAt, 'solvedAt survives eviction');
+assert.equal((await evicted.stats()).solved, 1);
+
+// Existing databases are not merged with the repo catalog on every request.
+const trimmed = JSON.parse(database);
+delete trimmed.problems['reverse-sequence'];
+database = JSON.stringify(trimmed);
+let seedCalls = 0;
+const countingSeed = async () => {
+  seedCalls += 1;
+  return seedFromDisk();
+};
+const cold = createCloudStore({ driver, seed: countingSeed });
 await cold.init();
-assert.ok(await cold.getProblem('reverse-sequence'), 'disk problems merge into an existing blob db');
+assert.equal(seedCalls, 0, 'existing database does not rescan the repo seed');
+assert.equal(await cold.getProblem('reverse-sequence'), null, 'seed is not merged per request');
 
 await store.deleteTest('cloud-test', '001');
 assert.equal((await store.listTests('cloud-test')).length, 1);
