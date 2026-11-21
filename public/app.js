@@ -124,11 +124,21 @@ int main() {
   /* ---------------- data ---------------- */
 
   async function refreshData() {
-    const [meta, list, subs] = await Promise.all([
-      api('/api/meta'),
-      api('/api/problems'),
-      api('/api/submissions'),
-    ]);
+    let meta;
+    let list;
+    let subs;
+    try {
+      const boot = await api('/api/bootstrap');
+      meta = { stats: boot.stats, tools: boot.tools, capabilities: boot.capabilities };
+      list = { problems: boot.problems };
+      subs = { submissions: boot.submissions };
+    } catch {
+      [meta, list, subs] = await Promise.all([
+        api('/api/meta'),
+        api('/api/problems'),
+        api('/api/submissions'),
+      ]);
+    }
     state.stats = meta.stats;
     state.tools = meta.tools;
     state.capabilities = meta.capabilities || null;

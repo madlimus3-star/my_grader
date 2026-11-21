@@ -164,7 +164,7 @@ my_grader/
 │   ├── api.js             shared JSON API used by the local server and Vercel
 │   ├── store.js           problems, test cases, submissions on disk
 │   ├── judge.js           compile + sandboxed runs (local)
-│   ├── cloud-store.js     Vercel Blob store (single JSON document)
+│   ├── cloud-store.js     Vercel Blob store (one JSON document + statement blobs)
 │   ├── judge0.js          Judge0 client (serverless)
 │   ├── pdf.js             pdftoppm page rendering (local)
 │   └── seed-data.js       generated snapshot of data/problems
@@ -191,6 +191,7 @@ All JSON. There is no built-in authentication: anyone with the URL can read and 
 
 | Method | Path | Purpose |
 | --- | --- | --- |
+| `GET` | `/api/bootstrap` | problems, submissions, stats and tools in one request |
 | `GET` | `/api/meta` | tag counts, totals, detected tools |
 | `GET`/`POST` | `/api/problems` | list / create |
 | `GET`/`PATCH`/`DELETE` | `/api/problems/:id` | read / update / delete |
