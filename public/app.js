@@ -17,6 +17,7 @@
     problemSubs: [],
     tab: 'solve',
     headerCollapsed: localStorage.getItem('mg:header-collapsed') === '1',
+    sidebarOpen: localStorage.getItem('mg:sidebar-open') === '1',
     editor: null,
     submitting: false,
     reveal: false,
@@ -176,6 +177,17 @@ int main() {
 
   /* ---------------- sidebar ---------------- */
 
+  function setSidebar(open, { persist = true } = {}) {
+    state.sidebarOpen = Boolean(open);
+    document.body.classList.toggle('sidebar-open', state.sidebarOpen);
+    const toggle = $('#menu-toggle');
+    if (toggle) {
+      toggle.setAttribute('aria-expanded', state.sidebarOpen ? 'true' : 'false');
+      toggle.setAttribute('aria-label', state.sidebarOpen ? 'Close library menu' : 'Open library menu');
+    }
+    if (persist) localStorage.setItem('mg:sidebar-open', state.sidebarOpen ? '1' : '0');
+  }
+
   const ICON_LIST = '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h10" stroke-linecap="round"/></svg>';
   const ICON_FOLDER = '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg>';
 
@@ -224,6 +236,7 @@ int main() {
           state.filter = { tag: state.filter.tag === tag ? null : tag, status: 'all' };
         }
         renderSidebar();
+        setSidebar(false);
         if (state.problem) {
           location.hash = '#/';
         } else {
@@ -1341,7 +1354,10 @@ int main() {
   async function route() {
     const hash = location.hash || '#/';
     const match = hash.match(/^#\/p\/([a-z0-9-]{1,64})(?:\?tab=(statement|solve|tests|subs))?/);
+    const inProblem = Boolean(match);
+    document.body.classList.toggle('problem-view', inProblem);
     if (match) {
+      setSidebar(false, { persist: false });
       await openProblem(match[1], match[2] || 'statement');
       return;
     }
@@ -1358,7 +1374,12 @@ int main() {
   });
 
   document.addEventListener('keydown', (e) => {
-    if (e.key === '/' && document.activeElement !== $('#q') && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) {
+    if (
+      e.key === '/' &&
+      !state.problem &&
+      document.activeElement !== $('#q') &&
+      !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)
+    ) {
       e.preventDefault();
       $('#q').focus();
       $('#q').select();
@@ -1366,9 +1387,13 @@ int main() {
     if (e.key === 'Escape') {
       const backdrop = $('.modal-backdrop');
       if (backdrop) $('#modal-root').innerHTML = '';
+      else if (state.sidebarOpen) setSidebar(false);
     }
   });
 
+  $('#menu-toggle').addEventListener('click', () => setSidebar(!state.sidebarOpen));
+  $('#sidebar-backdrop').addEventListener('click', () => setSidebar(false));
+  setSidebar(state.sidebarOpen, { persist: false });
   $('#new-problem').addEventListener('click', () => openProblemModal());
   window.addEventListener('hashchange', route);
 
