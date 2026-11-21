@@ -110,8 +110,7 @@ The repository is wired for two backends behind the same UI:
 Deployment steps:
 
 1. Import the GitHub repo into Vercel (framework preset **Other**, no build command). Static
-   files come from `public/`, the files under `api/` serve `/api/*`, and `middleware.js`
-   optionally adds HTTP Basic auth.
+   files come from `public/`, and the files under `api/` serve `/api/*`.
 2. Create a **Blob** store in the project (Storage → Blob) and connect it. Vercel injects
    `BLOB_STORE_ID` (OIDC) or `BLOB_READ_WRITE_TOKEN`; either one makes problems and submissions
    writable.
@@ -121,7 +120,6 @@ Deployment steps:
    | --- | --- | --- |
    | `BLOB_STORE_ID` / `BLOB_READ_WRITE_TOKEN` | – | enables persistent storage (otherwise read-only demo mode) |
    | `BLOB_ACCESS` | `private` | set to `public` if the Blob store was created as public |
-   | `APP_PASSWORD` | – | require HTTP Basic auth (any username, this password) |
    | `JUDGE0_URL` | `https://ce.judge0.com` | point at a self-hosted Judge0 |
    | `JUDGE0_TOKEN` | – | auth token for that Judge0 instance |
    | `JUDGE0_LANGUAGE_ID` | `54` | C++ (GCC 9.2) on Judge0 CE |
@@ -162,7 +160,6 @@ node scripts/test-cloud-store.mjs
 my_grader/
 ├── local-server.js        local HTTP server and static files
 ├── api/                   one Vercel Function per API route
-├── middleware.js          optional Basic auth for the public deployment
 ├── lib/
 │   ├── api.js             shared JSON API used by the local server and Vercel
 │   ├── store.js           problems, test cases, submissions on disk
@@ -190,7 +187,7 @@ tracked (see `.gitignore`).
 
 ## API
 
-All JSON. No authentication locally; set `APP_PASSWORD` on Vercel to require HTTP Basic auth.
+All JSON. There is no built-in authentication: anyone with the URL can read and edit data.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
@@ -217,9 +214,10 @@ This is a **local practice tool**, not a hardened public judge.
   but it is not a container or a VM. Only run code you are willing to execute on your machine.
 - For an untrusted audience, put the judge inside Docker/a VM and add an auth layer.
 - On Vercel, submitted code is sent to Judge0 (public `ce.judge0.com` by default) and executed
-  there. Set `APP_PASSWORD` before sharing the URL, and point `JUDGE0_URL` at your own instance
-  if the problems or the code must not leave your infrastructure. The Blob token grants read/write
-  access to the store; keep it in Vercel environment variables only.
+  there. Point `JUDGE0_URL` at your own instance if the problems or the code must not leave your
+  infrastructure. The deployment is public: use Vercel Deployment Protection (or a routing proxy)
+  before sharing the URL widely. The Blob credentials grant read/write access to the store; keep
+  them in Vercel environment variables only.
 
 ## Licence
 
