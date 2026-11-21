@@ -113,12 +113,13 @@ Deployment steps:
    files come from `public/`, the files under `api/` serve `/api/*`, and `middleware.js`
    optionally adds HTTP Basic auth.
 2. Create a **Blob** store in the project (Storage → Blob) and connect it. Vercel injects
-   `BLOB_READ_WRITE_TOKEN`, which makes problems and submissions writable.
+   `BLOB_STORE_ID` (OIDC) or `BLOB_READ_WRITE_TOKEN`; either one makes problems and submissions
+   writable.
 3. Optional environment variables:
 
    | Variable | Default | Purpose |
    | --- | --- | --- |
-   | `BLOB_READ_WRITE_TOKEN` | – | enables persistent storage (otherwise read-only demo mode) |
+   | `BLOB_STORE_ID` / `BLOB_READ_WRITE_TOKEN` | – | enables persistent storage (otherwise read-only demo mode) |
    | `BLOB_ACCESS` | `private` | set to `public` if the Blob store was created as public |
    | `APP_PASSWORD` | – | require HTTP Basic auth (any username, this password) |
    | `JUDGE0_URL` | `https://ce.judge0.com` | point at a self-hosted Judge0 |

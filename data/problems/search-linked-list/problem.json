@@ -1,0 +1,16 @@
+{
+  "id": "search-linked-list",
+  "title": "Search Linked List",
+  "tags": [
+    "Linked List"
+  ],
+  "difficulty": "Easy",
+  "timeLimitMs": 1000,
+  "memoryLimitMb": 256,
+  "statementFile": "statement.pdf",
+  "statementName": "L02_Search_Linked_List (Thai).pdf",
+  "statementBytes": 174066,
+  "createdAt": "2026-11-20T01:22:00.162Z",
+  "updatedAt": "2026-11-20T02:03:33.840Z",
+  "statementPages": 2
+}
